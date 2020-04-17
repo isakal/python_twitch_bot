@@ -84,6 +84,22 @@ class TwitchApi:
 
         return chatters
 
+    def _pagination(self, url):
+        """
+        gets all the data from a url using the cursor value
+        """
+        cursor = ""
+        data = []
+        while cursor is not None:
+            response = self._call_api(f"{url}&after={cursor}")
+            json = response.json()
+
+            cursor = json["pagination"].get("cursor")
+            new_data = json["data"]
+            data.extend(new_data)
+
+        return data
+
     def user_info(self, username: str):
         """
         Get info on a twitch user.
@@ -103,3 +119,33 @@ class TwitchApi:
         user_data = self.user_info(username)
         return user_data["id"]
 
+    def following_info(self, to_name, from_name):
+        if to_name is not None:
+            to_id = self.get_user_id(to_name)
+        else:
+            to_id = None
+
+        if from_name is not None:
+            from_id = self.get_user_id(from_name)
+        else:
+            from_id = None
+
+        url = f"https://api.twitch.tv/helix/users/follows?to_id={to_id}&from_id={from_id}"
+        followers = self._pagination(url)
+        return followers
+
+    # BUG: only works if they are live
+    # look into how it can be done if they are offline
+    def stream_info(self, streamer_name: str):
+        """
+        Information about a stream.
+        """
+        url = f"https://api.twitch.tv/helix/streams?user_login={streamer_name}"
+        data = self._call_api(url).json()
+
+        return data["data"][0]
+
+    def get_game(self, game_id):
+        url = f"https://api.twitch.tv/helix/games?id={game_id}"
+        data = self._call_api(url).json()
+        return data["data"][0]["name"]

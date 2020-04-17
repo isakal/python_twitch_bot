@@ -9,7 +9,6 @@ class ChannelInfo:
     def __init__(self, data):
         self.rank = data["broadcaster_type"]
         self.description = data["description"]
-        self.view_count = data["view_count"]
 
 class Channel:
     """
@@ -42,8 +41,47 @@ class Channel:
         data = self._bot.api.user_info(self.name)
         return ChannelInfo(data)
 
-    def __eq__(self, other: Channel) -> bool:
+    @property
+    def followers(self):
+        """
+        Who follows this channel.
+        """
+        followers = []
+        for connection in self._bot.api.following_info(to_id=self.name):
+            followers.append(connection["from_name"])
+
+        return followers
+
+    def __eq__(self, other) -> bool:
         return self.name == other.name
+
+    @property
+    def stream(self):
+        """
+        The stream object representing this channel.
+        """
+        data = self._bot.api.stream_info(self.name)
+        return Stream(data, self._bot)
+
+class Stream:
+    """
+    Like a channnel, but with more info on the stream.
+    """
+    def __init__(self, data, bot):
+        self.name = data["user_name"]
+        self.game_id = data["game_id"]
+        self.title = data["title"]
+        self.views = data["viewer_count"]
+
+        self._bot = bot
+
+    @property
+    def game(self):
+        """
+        The name of the currently playing game.
+        """
+        return self._bot.api.get_game(self.game_id)
+
 
 class User:
     """
@@ -51,15 +89,25 @@ class User:
     """
     def __init__(self, username: str, channel: Channel, twitch_bot):
         self.name = username
-        self.channel = channel
+        self._channel = channel
         self._bot = twitch_bot
+
+    @property
+    def channel(self):
+        """
+        A channel reprisenting this users channel,
+
+        If you wanted the channel this users object was made form use "_channel"
+        """
+        return Channel(self.name, self._bot)
+
 
     @property
     def role(self):
         """
         The highest role of the user.
         """
-        chatters = self._bot.api.chatters(self.channel.name)
+        chatters = self._bot.api.chatters(self._channel.name)
         for role, users in chatters.items():
             if self.name in users:
                 role = role.rstrip("s")
@@ -67,6 +115,28 @@ class User:
 
         else:
             raise ValueError(f"user {self.name} was not found in the chatters list.")
+
+    @property
+    def following(self):
+        """
+        Who this person is following.
+        """
+        following  = []
+        for connection in self._bot.api.following_info(from_name=self.name):
+            following.append(connection["to_name"])
+
+        return following
+
+    def is_following(self):
+        """
+        Checks if the user is following the channel.
+
+        Use this instead of checking if the username is in the channel followers.
+        Since this ask twitch directly if they are following and not for all followers.
+        """
+        follow_info = self._bot.api.following_info(from_name=self.name, to_name=self._channel.name)
+
+        return len(follow_info) == 1 # if they are following there will be 1 entry, that follow.
 
     def __eq__(self, other):
         return self.name == other.name
@@ -103,6 +173,12 @@ class Context:
         Send a message in the same channel as the command was actiavted in.
         """
         self.message.reply(message)
+
+    def create_user(self, username):
+        """
+        Create a user as if their message came from the channel the command was made in.
+        """
+        return User(username, self.channel, self.bot)
 
 class Command:
     """

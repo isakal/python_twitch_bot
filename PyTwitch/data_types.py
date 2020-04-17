@@ -2,6 +2,15 @@ from typing import Callable, List
 
 from .utils import check_type
 
+class ChannelInfo:
+    """
+    Contains info about a channel.
+    """
+    def __init__(self, data):
+        self.rank = data["broadcaster_type"]
+        self.description = data["description"]
+        self.view_count = data["view_count"]
+
 class Channel:
     """
     A twitch channel.
@@ -16,14 +25,51 @@ class Channel:
         """
         self._bot.send_message(self.name, message)
 
+    @property
+    def chatters(self):
+        return self._bot.api.chatters_no_roles(self.name)
+
+    def chatters_with_roles(self):
+        return self._bot.api.chatters(self.name)
+
+    @property
+    def info(self) -> ChannelInfo:
+        """
+        A class containing info about the channel.
+
+        From the api.
+        """
+        data = self._bot.api.user_info(self.name)
+        return ChannelInfo(data)
+
+    def __eq__(self, other: Channel) -> bool:
+        return self.name == other.name
 
 class User:
     """
     A twitch user.
     """
-    def __init__(self, username: str, twitch_bot):
+    def __init__(self, username: str, channel: Channel, twitch_bot):
         self.name = username
+        self.channel = channel
         self._bot = twitch_bot
+
+    @property
+    def role(self):
+        """
+        The highest role of the user.
+        """
+        chatters = self._bot.api.chatters(self.channel.name)
+        for role, users in chatters.items():
+            if self.name in users:
+                role = role.rstrip("s")
+                return role
+
+        else:
+            raise ValueError(f"user {self.name} was not found in the chatters list.")
+
+    def __eq__(self, other):
+        return self.name == other.name
 
 
 class Message:
@@ -50,6 +96,7 @@ class Context:
         self.message = message
         self.channel = message.channel
         self.user = message.user
+        self.bot = message.channel._bot
 
     def reply(self, message: str) -> None:
         """
@@ -69,3 +116,6 @@ class Command:
         Runs the command.
         """
         self.func(ctx, *arguments)
+
+    def __eq__(self, other):
+        return self.func == other.func

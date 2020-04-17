@@ -64,10 +64,10 @@ class TwitchCore:
 
                 data = data[1:]
                 user = data.split("!")[0]
-                channel = data.split("#")[1].split(":")[0]
+                channel = data.split("#")[1].split(":")[0][:-1]
                 message = data.split(":")[1:]
                 message = ":".join(message)
 
                 channel = Channel(channel, self)
-                user = User(user, self)
+                user = User(user, channel, self)
                 return Message(user, channel, message)
